@@ -16,6 +16,7 @@ package main
 
 import (
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/joshdk/go-junit"
@@ -173,13 +174,14 @@ func TestIngestArtifacts(t *testing.T) {
 	require.Equal(t, expectedTestResults, rg.testSuites)
 }
 
-func TestTrimPath(t *testing.T) {
+func TestTrimPathAndComponentName(t *testing.T) {
 	tests := []struct {
 		name       string
 		owner      string
 		repo       string
 		module     string
 		wantModule string
+		wantComponent string
 	}{
 		{
 			name:       "Test contrib host metrics integration path",
@@ -187,6 +189,7 @@ func TestTrimPath(t *testing.T) {
 			repo:       "opentelemetry-collector-contrib",
 			module:     "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver/integration_test.go",
 			wantModule: "receiver/hostmetricsreceiver/integration_test.go",
+			wantComponent: "receiver/hostmetricsreceiver",
 		},
 		{
 			name:       "Test core otlphttp exporter test path",
@@ -194,12 +197,16 @@ func TestTrimPath(t *testing.T) {
 			repo:       "opentelemetry-collector",
 			module:     "github.com/open-telemetry/opentelemetry-collector/exporter/otlphttpexporter/otlp_test.go",
 			wantModule: "exporter/otlphttpexporter/otlp_test.go",
+			wantComponent: "exporter/otlphttpexporter",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantModule, trimModule(tt.owner, tt.repo, tt.module), "owner: %s, repo: %s, module: %s, wantModule: %s", tt.owner, tt.repo, tt.module, tt.wantModule)
+			actualModule := trimModule(tt.owner, tt.repo, tt.module)
+			actualComponent := getComponent(actualModule)
+			assert.Equal(t, tt.wantModule, actualModule, "owner: %s, repo: %s, module: %s, wantModule: %s", tt.owner, tt.repo, tt.module, tt.wantModule)
+			assert.Equal(t, tt.wantComponent, actualComponent, "owner: %s, repo: %s, module: %s, wantComponent: %s", tt.owner, tt.repo, tt.module, tt.wantComponent)
 		})
 	}
 }
@@ -219,7 +226,12 @@ func TestTemplateExpansion(t *testing.T) {
 		githubRunID:      "555555",
 	}
 
-	// Hardcoding iterator to 0 to get the first report
+	// Sort the reports by module name to ensure deterministic order
+	sort.Slice(rg.reports, func(i, j int) bool {
+		return rg.reports[i].module < rg.reports[j].module
+	})
+
+
 	rg.reportIterator = 0
 
 	tests := []struct {
@@ -234,6 +246,9 @@ func TestTemplateExpansion(t *testing.T) {
 Auto-generated report for ` + "`test-ci`" + ` job build.
 
 Link to failed build: https://github.com/test-org/test-repo/actions/runs/555555
+
+### Component(s)
+` + "package1" + `
 
 #### Test Failures
 -  ` + "`TestFailure`" + `
